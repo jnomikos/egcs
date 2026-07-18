@@ -1,5 +1,6 @@
 use mavlink::dialects::common::MavMessage;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::watch::{Receiver, Sender};
 use std::sync::Arc;
 
 type Conn = Arc<Box<dyn mavlink::AsyncMavConnection<MavMessage> + Send + Sync>>;
@@ -22,12 +23,29 @@ pub enum ConnStatus {
 pub struct Telemetry {
     pub attitude: Option<mavlink::dialects::common::ATTITUDE_DATA>,
     pub gps_raw_int: Option<mavlink::dialects::common::GPS_RAW_INT_DATA>,
+    pub global_position_int: Option<mavlink::dialects::common::GLOBAL_POSITION_INT_DATA>,
     pub heartbeat: Option<mavlink::dialects::common::HEARTBEAT_DATA>,
     pub sys_status: Option<mavlink::dialects::common::SYS_STATUS_DATA>,
 }
 
+impl Telemetry {
+    pub fn update(msg: &MavMessage) -> Self {
+        let mut telemetry = Telemetry::default();
+        match msg {
+            MavMessage::ATTITUDE(data) => telemetry.attitude = Some(data.clone()),
+            MavMessage::GPS_RAW_INT(data) => telemetry.gps_raw_int = Some(data.clone()),
+            MavMessage::GLOBAL_POSITION_INT(data) => telemetry.global_position_int = Some(data.clone()),
+            MavMessage::HEARTBEAT(data) => telemetry.heartbeat = Some(data.clone()),
+            MavMessage::SYS_STATUS(data) => telemetry.sys_status = Some(data.clone()),
+            _ => {}
+        }
+        telemetry
+    }
+}
+
 struct Ui {
     status_tx: UnboundedSender<ConnStatus>,
+    telemetry_tx: Sender<Telemetry>,
     ctx: eframe::egui::Context,
 }
 
@@ -41,9 +59,10 @@ impl Ui {
 pub async fn run(
     mut cmd_rx: UnboundedReceiver<Command>,
     status_tx: UnboundedSender<ConnStatus>,
+    telemetry_tx: Sender<Telemetry>,
     ctx: eframe::egui::Context,
 ) {
-    let ui = Ui { status_tx, ctx };
+    let ui = Ui { status_tx, telemetry_tx, ctx };
 
     while let Some(url) = wait_for_connect(&mut cmd_rx).await {
         match connect(&url).await {
@@ -81,9 +100,9 @@ async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, ui: &Ui)
             incoming = conn.recv() => match incoming {
                 Ok((_header, msg)) => {
                     ui.set(ConnStatus::Connected);
-                    // TODO: forward telemetry to the UI (Event::Telemetry); for now, observe it.
-                    println!("recv: {:?}", msg);
-                    let _ = &ui; // ui unused until telemetry is wired
+                    let telemetry = Telemetry::update(&msg);
+                    let _ = ui.telemetry_tx.send(telemetry);
+                    println!("Received message: {:?}", msg);
                 }
                 Err(e) => {
                     println!("Link error, disconnecting: {}", e);

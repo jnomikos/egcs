@@ -1,4 +1,6 @@
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::watch::{Receiver, Sender};
+use crate::connection::Telemetry;
 use crate::connection::{self, ConnStatus};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -13,6 +15,8 @@ pub struct EgcsApp {
     cmd_tx: Option<UnboundedSender<connection::Command>>,
     #[serde(skip)]
     status_rx: Option<UnboundedReceiver<ConnStatus>>,
+    #[serde(skip)]
+    telemetry_rx: Option<Receiver<Telemetry>>,
 }
 
 impl Default for EgcsApp {
@@ -22,6 +26,7 @@ impl Default for EgcsApp {
             conn_status: ConnStatus::Disconnected,
             cmd_tx: None,
             status_rx: None,
+            telemetry_rx: None,
         }
     }
 }
@@ -34,11 +39,14 @@ impl EgcsApp {
         
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<connection::Command>();
         let (status_tx, status_rx) = tokio::sync::mpsc::unbounded_channel::<ConnStatus>();
+        // Telemetry is receive only and thus should be a watch
+        let (telemetry_tx, _telemetry_rx) = tokio::sync::watch::channel::<connection::Telemetry>(connection::Telemetry::default());
+        
         let ctx = cc.egui_ctx.clone();
 
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().expect("failed to build tokio runtime");
-            rt.block_on(connection::run(cmd_rx, status_tx, ctx));
+            rt.block_on(connection::run(cmd_rx, status_tx, telemetry_tx, ctx));
         });
 
         let mut app: EgcsApp = cc
@@ -48,6 +56,7 @@ impl EgcsApp {
 
         app.cmd_tx = Some(cmd_tx);
         app.status_rx = Some(status_rx);
+        app.telemetry_rx = Some(_telemetry_rx);
         app
     }
 }
@@ -121,6 +130,13 @@ impl eframe::App for EgcsApp {
                 if let ConnStatus::Failed(e) = &self.conn_status {
                     ui.colored_label(egui::Color32::RED, format!("Failed: {e}"));
                 }
+
+                let altitude = if let Some(rx) = &mut self.telemetry_rx {
+                    rx.borrow().global_position_int.as_ref().map(|pos| pos.alt).unwrap_or(0)
+                } else {
+                    0
+                };
+                ui.label(format!("Altitude: {altitude}"));
             });
         });
     }
