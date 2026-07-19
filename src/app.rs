@@ -3,6 +3,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::watch::{Receiver, Sender};
 use crate::telemetry::Telemetry;
 use crate::connection::{self, ConnStatus};
+use crate::theme::*;
 use egui::{
     Ui, WidgetText
 };
@@ -38,33 +39,6 @@ struct DockContext {
     telemetry_rx: Option<Receiver<Telemetry>>,
 }
 
-fn stat_tile(ui: &mut Ui, label: &str, value: impl Into<String>, color: egui::Color32) {
-    egui::Frame::group(ui.style())
-        .inner_margin(egui::Margin::same(8))
-        .show(ui, |ui| {
-            ui.vertical(|ui| {
-                ui.set_min_width(110.0);
-                ui.label(egui::RichText::new(label).size(12.0).weak());
-                ui.label(egui::RichText::new(value.into()).size(34.0).strong().color(color));
-            });
-        });
-}
-
-fn action_button(ui: &mut Ui, label: &str, color: egui::Color32) -> bool {
-    let luminance = 0.299 * color.r() as f32 + 0.587 * color.g() as f32 + 0.114 * color.b() as f32;
-    let text_color = if luminance > 140.0 {
-        egui::Color32::BLACK
-    } else {
-        egui::Color32::WHITE
-    };
-    let text = egui::RichText::new(label).size(18.0).strong().color(text_color);
-    let button = egui::Button::new((egui::Atom::grow(), text, egui::Atom::grow()))
-        .fill(color)
-        .corner_radius(6.0)
-        .min_size(egui::vec2(110.0, 40.0));
-    ui.add(button).clicked()
-}
-
 impl DockContext {
     fn actions(&mut self, ui: &mut Ui) {
         ui.vertical(|ui| {
@@ -82,19 +56,19 @@ impl DockContext {
             let armed = rx.borrow().armed().unwrap_or(false);
 
             if armed {
-                if action_button(ui, "Disarm", egui::Color32::from_rgb(0xf4, 0x47, 0x47)) {
+                if action_button(ui, "Disarm", RED) {
                     if let Some(tx) = &self.cmd_tx {
                         let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Disarm));
                     }
                 }
 
-                if action_button(ui, "Takeoff", egui::Color32::from_rgb(0x56, 0x9c, 0xd6)) {
+                if action_button(ui, "Takeoff", BLUE) {
                     if let Some(tx) = &self.cmd_tx {
                         let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Takeoff { altitude: 20.0 }));
                     }
                 }
             } else {
-                if action_button(ui, "Arm", egui::Color32::from_rgb(0x6a, 0x99, 0x55)) {
+                if action_button(ui, "Arm", GREEN) {
                     if let Some(tx) = &self.cmd_tx {
                         let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Arm));
                     }
@@ -158,36 +132,32 @@ impl DockContext {
         let vs = telemetry.vertical_speed_mps().unwrap_or(0.0);
         let mode = telemetry.flight_mode();
 
-        let teal = egui::Color32::from_rgb(0x4e, 0xc9, 0xb0);
-        let blue = egui::Color32::from_rgb(0x56, 0x9c, 0xd6);
-        let amber = egui::Color32::from_rgb(0xd7, 0xba, 0x7d);
-
         egui::Grid::new("telemetry_grid")
             .num_columns(2)
             .spacing([8.0, 8.0])
             .show(ui, |ui| {
-                stat_tile(ui, "ALTITUDE (m)", format!("{alt:.1}"), teal);
-                stat_tile(ui, "REL ALT (m)", format!("{rel:.1}"), teal);
+                stat_tile(ui, "ALTITUDE (m)", format!("{alt:.1}"), TEAL);
+                stat_tile(ui, "REL ALT (m)", format!("{rel:.1}"), TEAL);
                 ui.end_row();
 
-                stat_tile(ui, "GROUNDSPEED (m/s)", format!("{gs:.1}"), blue);
-                stat_tile(ui, "VERT SPEED (m/s)", format!("{vs:.1}"), blue);
+                stat_tile(ui, "GROUNDSPEED (m/s)", format!("{gs:.1}"), BLUE);
+                stat_tile(ui, "VERT SPEED (m/s)", format!("{vs:.1}"), BLUE);
                 ui.end_row();
 
                 stat_tile(
                     ui,
                     "FLIGHT MODE",
                     mode.map(|m| format!("{m:?}")).unwrap_or_else(|| "—".to_owned()),
-                    amber,
+                    AMBER,
                 );
                 stat_tile(
                     ui,
                     "ARMED",
                     if armed { "ARMED" } else { "DISARMED" },
                     if armed {
-                        egui::Color32::from_rgb(0xf4, 0x47, 0x47)
+                        RED
                     } else {
-                        egui::Color32::from_rgb(0x6a, 0x99, 0x55)
+                        GREEN
                     },
                 );
                 ui.end_row();

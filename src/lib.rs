@@ -2,6 +2,7 @@
 
 mod app;
 pub use app::EgcsApp;
+mod theme;
 mod connection;
 mod flight_mode;
 mod telemetry;
