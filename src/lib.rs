@@ -3,3 +3,4 @@
 mod app;
 pub use app::EgcsApp;
 mod connection;
+mod flight_mode;

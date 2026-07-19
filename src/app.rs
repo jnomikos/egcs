@@ -127,9 +127,49 @@ impl eframe::App for EgcsApp {
                     }
                 }
 
+                let armed = if let Some(rx) = &mut self.telemetry_rx {
+                    rx.borrow().armed()
+                } else {
+                    Some(false)
+                };
+                let arm_label = if let Some(true) = armed { "Disarm" } else { "Arm" };
+                if connected {
+                    if ui.button(arm_label).clicked() {
+                        if let Some(tx) = &self.cmd_tx {
+                            let _ = tx.send(connection::Command::Vehicle(if let Some(true) = armed {
+                                connection::VehicleCommand::Disarm
+                            } else {
+                                connection::VehicleCommand::Arm
+                            }));
+                        }
+                    }
+                }
+
+                let takeoff_label = "Takeoff";
+                if connected {
+                    if ui.button(takeoff_label).clicked() {
+                        if let Some(tx) = &self.cmd_tx {
+                            let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Takeoff { altitude: 10.0 }));
+                        }
+                    }
+                }
+
                 if let ConnStatus::Failed(e) = &self.conn_status {
                     ui.colored_label(egui::Color32::RED, format!("Failed: {e}"));
                 }
+
+                let altitude = if let Some(rx) = &mut self.telemetry_rx {
+                    rx.borrow().altitude_m().unwrap_or(0.0)
+                } else {
+                    0.0
+                };
+                let relative_altitude = if let Some(rx) = &mut self.telemetry_rx {
+                    rx.borrow().relative_altitude_m().unwrap_or(0.0)
+                } else {
+                    0.0
+                };
+                ui.label(format!("Relative Altitude: {relative_altitude} m"));
+                ui.label(format!("Altitude: {altitude} m"));
             });
         });
     }
