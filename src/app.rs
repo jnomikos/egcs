@@ -4,6 +4,7 @@ use tokio::sync::watch::{Receiver};
 use crate::telemetry::Telemetry;
 use crate::connection::{self, ConnStatus};
 use crate::theme::*;
+use walkers::{HttpTiles, Map, MapMemory, Position, TileId, sources::{TileSource, Attribution}, lon_lat};
 use egui::{
     Ui, WidgetText
 };
@@ -11,6 +12,48 @@ use egui_dock::{
     AllowedSplits, DockArea, DockState, NodeIndex, NodePath, OverlayType, Style, SurfaceIndex,
     TabInteractionStyle, TabViewer, tab_viewer::OnCloseResponse,
 };
+
+struct EsriWorldImagery;
+
+impl TileSource for EsriWorldImagery {
+    fn tile_url(&self, tile_id: TileId) -> String {
+        // Esri uses z/y/x ordering (not z/x/y).
+        format!(
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{}/{}/{}",
+            tile_id.zoom, tile_id.y, tile_id.x
+        )
+    }
+
+    fn attribution(&self) -> Attribution {
+        Attribution {
+            text: "© Esri, Maxar, Earthstar Geographics",
+            url: "https://www.esri.com/en-us/legal/copyright-trademarks",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
+}
+
+/// Transparent overlay of borders + place labels, drawn on top of the imagery.
+struct EsriReferenceOverlay;
+
+impl TileSource for EsriReferenceOverlay {
+    fn tile_url(&self, tile_id: TileId) -> String {
+        format!(
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{}/{}/{}",
+            tile_id.zoom, tile_id.y, tile_id.x
+        )
+    }
+
+    fn attribution(&self) -> Attribution {
+        Attribution {
+            text: "© Esri",
+            url: "https://www.esri.com/en-us/legal/copyright-trademarks",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
+}
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct DockContext {
@@ -27,6 +70,11 @@ struct DockContext {
     show_secondary_button_hint: bool,
     secondary_button_on_modifier: bool,
     secondary_button_context_menu: bool,
+    #[serde(skip)]
+    tiles: Option<HttpTiles>,
+    #[serde(skip)]
+    reference_tiles: Option<HttpTiles>,
+    map_memory: MapMemory,
 
     connection_url: String,
     #[serde(skip)]
@@ -211,7 +259,19 @@ impl DockContext {
     }
 
     fn map(&mut self, ui: &mut Ui) {
-        ui.label("Map coming soon!");
+        let (Some(tiles), Some(reference)) = (self.tiles.as_mut(), self.reference_tiles.as_mut()) else {
+            ui.label("Map unavailable.");
+            return;
+        };
+        ui.add(
+            Map::new(
+                Some(tiles),
+                &mut self.map_memory,
+                lon_lat(17.03664, 51.09916),
+            )
+            .with_layer(reference, 1.0)
+            .zoom_with_ctrl(false),
+        );
     }
 }
 
@@ -293,6 +353,9 @@ impl Default for EgcsApp {
             show_secondary_button_hint: true,
             secondary_button_on_modifier: false,
             secondary_button_context_menu: false,
+            tiles: None,
+            reference_tiles: None,
+            map_memory: MapMemory::default(),
             connection_url: "udpin:0.0.0.0:14550".to_owned(),
             conn_status: ConnStatus::Disconnected,
             cmd_tx: None,
@@ -332,6 +395,8 @@ impl EgcsApp {
         app.dock_context.cmd_tx = Some(cmd_tx);
         app.dock_context.status_rx = Some(status_rx);
         app.dock_context.telemetry_rx = Some(_telemetry_rx);
+        app.dock_context.tiles = Some(HttpTiles::new(EsriWorldImagery, cc.egui_ctx.clone()));
+        app.dock_context.reference_tiles = Some(HttpTiles::new(EsriReferenceOverlay, cc.egui_ctx.clone()));
         app
     }
 }
