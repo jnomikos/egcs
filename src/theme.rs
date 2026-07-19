@@ -7,7 +7,7 @@ pub const BLUE:  Color32 = Color32::from_rgb(0x56, 0x9c, 0xd6);
 pub const TEAL:  Color32 = Color32::from_rgb(0x4e, 0xc9, 0xb0);
 pub const AMBER: Color32 = Color32::from_rgb(0xd7, 0xba, 0x7d);
 
-const WIDGET_WIDTH: f32 = 110.0;
+const WIDGET_WIDTH: f32 = 150.0;
 
 // ITU-R BT.601 luma coefficients for converting RGB to luma (Y) in YUV color space.
 // https://en.wikipedia.org/wiki/Luma_(video)

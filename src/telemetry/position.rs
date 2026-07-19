@@ -10,10 +10,14 @@ impl Telemetry {
     }
 
     pub fn ground_speed_mps(&self) -> Option<f32> {
-        self.global_position_int.as_ref().map(|p| p.vx as f32 / 100.0)
+        self.global_position_int.as_ref().map(|p| {
+            let vx = p.vx as f32 / 100.0;
+            let vy = p.vy as f32 / 100.0;
+            (vx * vx + vy * vy).sqrt()
+        })
     }
 
     pub fn vertical_speed_mps(&self) -> Option<f32> {
-        self.global_position_int.as_ref().map(|p| p.vz as f32 / 100.0)
+        self.global_position_int.as_ref().map(|p| -(p.vz as f32) / 100.0)
     }
 }

@@ -1,4 +1,5 @@
 use super::{Conn, Telemetry, VehicleCommand, GCS_HEADER};
+use crate::telemetry::ModeSelector;
 use mavlink::dialects::common::MavMessage;
 
 pub async fn handle_vehicle_command(
@@ -24,10 +25,14 @@ pub async fn handle_vehicle_command(
         VehicleCommand::Land => {
             command_long(target_system, MavCmd::MAV_CMD_NAV_LAND, [0.0; 7])
         }
-        VehicleCommand::SetMode(mode) => {
-            let (main, sub) = mode.main_sub();
+        VehicleCommand::SetMode(ModeSelector::Custom(custom_mode)) => {
+            let main = (custom_mode >> 16) & 0xFF;
+            let sub = (custom_mode >> 24) & 0xFF;
             let base = MavModeFlag::MAV_MODE_FLAG_CUSTOM_MODE_ENABLED.bits() as f32;
             command_long(target_system, MavCmd::MAV_CMD_DO_SET_MODE, [base, main as f32, sub as f32, 0.0, 0.0, 0.0, 0.0])
+        }
+        VehicleCommand::SetMode(ModeSelector::Standard(standard_mode)) => {
+            command_long(target_system, MavCmd::MAV_CMD_DO_SET_STANDARD_MODE, [standard_mode as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         }
     };
 
@@ -60,6 +65,14 @@ pub fn request_parameters() -> MavMessage {
             target_component: 0,
         },
     )
+}
+
+/// Ask the vehicle to enumerate all of its flight modes via AVAILABLE_MODES.
+pub fn request_available_modes(target_system: u8) -> MavMessage {
+    use mavlink::dialects::common::{AVAILABLE_MODES_DATA, MavCmd};
+    use mavlink::MessageData;
+    // param1 = message id to emit, param2 = 0 requests all modes.
+    command_long(target_system, MavCmd::MAV_CMD_REQUEST_MESSAGE, [AVAILABLE_MODES_DATA::ID as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 }
 
 /// Create a message enabling data streaming

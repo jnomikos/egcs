@@ -1,5 +1,4 @@
-use super::Telemetry;
-use crate::flight_mode::FlightMode;
+use super::{Telemetry, AvailableMode, ModeSelector, mode_selector};
 use mavlink::dialects::common::{MavModeFlag, MavLandedState};
 
 impl Telemetry {
@@ -34,22 +33,23 @@ impl Telemetry {
         })
     }
 
-    pub fn flight_mode(&self) -> Option<FlightMode> {
-        self.heartbeat.as_ref().and_then(|hb| FlightMode::from_custom_mode(hb.custom_mode))
+    pub fn selectable_modes(&self) -> impl Iterator<Item = &AvailableMode> + '_ {
+        self.available_modes.values().filter(|m| m.user_selectable)
     }
 
-    pub fn status(&self) -> Option<&'static str> {
-        use mavlink::dialects::common::MavState::*;
-        self.heartbeat.as_ref().map(|hb| match hb.system_status {
-            MAV_STATE_UNINIT => "Uninitialized",
-            MAV_STATE_BOOT => "Booting",
-            MAV_STATE_CALIBRATING => "Calibrating",
-            MAV_STATE_STANDBY => "Ready",
-            MAV_STATE_ACTIVE => "Active",
-            MAV_STATE_CRITICAL => "Critical",
-            MAV_STATE_EMERGENCY => "Emergency",
-            MAV_STATE_POWEROFF => "Powering Off",
-            MAV_STATE_FLIGHT_TERMINATION => "Flight Termination",
+    pub fn current_selector(&self) -> Option<ModeSelector> {
+        self.current_mode.as_ref().map(|c| mode_selector(c.standard_mode, c.custom_mode))
+    }
+
+    pub fn current_mode_name(&self) -> Option<&str> {
+        let current = self.current_selector()?;
+        self.available_modes.values().find(|m| m.selector == current).map(|m| m.name.as_str())
+    }
+
+    /// True when the vehicle could not enter (or fell out of) the last commanded mode.
+    pub fn mode_change_rejected(&self) -> bool {
+        self.current_mode.as_ref().is_some_and(|c| {
+            c.intended_custom_mode != 0 && c.intended_custom_mode != c.custom_mode
         })
     }
 }

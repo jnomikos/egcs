@@ -8,7 +8,7 @@ use super::{
     Conn, ConnStatus, Command, GCS_HEADER
 };
 
-use super::protocol::{handle_vehicle_command, request_parameters, request_stream, gcs_heartbeat};
+use super::protocol::{handle_vehicle_command, request_parameters, request_stream, request_available_modes, gcs_heartbeat};
 
 pub async fn run(
     mut cmd_rx: UnboundedReceiver<Command>,
@@ -53,6 +53,7 @@ async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, app_hand
     let _ = conn.send(&GCS_HEADER, &request_parameters()).await;
     let _ = conn.send(&GCS_HEADER, &request_stream()).await;
     let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(1));
+    let mut modes_requested = false;
     loop {
         tokio::select! {
             incoming = conn.recv() => match incoming {
@@ -61,6 +62,17 @@ async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, app_hand
                     if header.component_id == MavComponent::MAV_COMP_ID_AUTOPILOT1 as u8 {
                         app_handle.set(ConnStatus::Connected);
                         app_handle.telemetry_tx.send_modify(|t| t.update(&header, &msg));
+
+                        // Fetch the mode list once we know the target system, and again
+                        // whenever the vehicle signals the set has changed.
+                        let target_system = app_handle.telemetry_tx.borrow().system_id;
+                        let modes_changed = matches!(msg, MavMessage::AVAILABLE_MODES_MONITOR(_));
+                        if let Some(sys) = target_system {
+                            if !modes_requested || modes_changed {
+                                let _ = conn.send(&GCS_HEADER, &request_available_modes(sys)).await;
+                                modes_requested = true;
+                            }
+                        }
                     }
                 }
                 Err(e) => {

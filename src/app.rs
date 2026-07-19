@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::watch::{Receiver, Sender};
+use tokio::sync::watch::{Receiver};
 use crate::telemetry::Telemetry;
 use crate::connection::{self, ConnStatus};
 use crate::theme::*;
@@ -41,7 +41,7 @@ struct DockContext {
 
 impl DockContext {
     fn actions(&mut self, ui: &mut Ui) {
-        ui.vertical(|ui| {
+        ui.horizontal(|ui| {
             let connected = self.conn_status == ConnStatus::Connected;
             if !connected {
                 ui.label("Not connected to UAV.");
@@ -53,9 +53,13 @@ impl DockContext {
                 return;
             };
 
-            let armed = rx.borrow().armed().unwrap_or(false);
+            let rx_borrowed = rx.borrow();
 
-            if armed {
+            let armed = rx_borrowed.armed().unwrap_or(false);
+            let flying = rx_borrowed.is_flying().unwrap_or(false);
+            let landing = rx_borrowed.is_landing().unwrap_or(false);
+
+            if armed && !flying {
                 if action_button(ui, "Disarm", RED) {
                     if let Some(tx) = &self.cmd_tx {
                         let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Disarm));
@@ -67,16 +71,46 @@ impl DockContext {
                         let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Takeoff { altitude: 20.0 }));
                     }
                 }
-            } else {
+            } else if armed && flying && !landing {
+                if action_button(ui, "Land", AMBER) {
+                    if let Some(tx) = &self.cmd_tx {
+                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Land));
+                    }
+                }
+            } else if !armed {
                 if action_button(ui, "Arm", GREEN) {
                     if let Some(tx) = &self.cmd_tx {
                         let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Arm));
                     }
                 }
             }
-
+            
+            Self::flight_mode_selector(ui, &rx_borrowed, &self.cmd_tx);
             
         });
+    }
+
+    fn flight_mode_selector(
+        ui: &mut Ui,
+        telemetry: &Telemetry,
+        cmd_tx: &Option<UnboundedSender<connection::Command>>,
+    ) {
+        let current = telemetry.current_selector();
+
+        egui::ComboBox::from_label("")
+            .width(100.0)
+            .selected_text(telemetry.current_mode_name().unwrap_or("Unknown"))
+            .show_ui(ui, |ui| {
+                for mode in telemetry.selectable_modes() {
+                    if ui.selectable_label(current == Some(mode.selector), &mode.name).clicked() {
+                        if let Some(tx) = cmd_tx {
+                            let _ = tx.send(connection::Command::Vehicle(
+                                connection::VehicleCommand::SetMode(mode.selector),
+                            ));
+                        }
+                    }
+                }
+            });
     }
 
     fn comm_link(&mut self, ui: &mut Ui) {
@@ -126,11 +160,15 @@ impl DockContext {
         let telemetry = rx.borrow();
 
         let armed = telemetry.armed().unwrap_or(false);
+        let flying = telemetry.is_flying().unwrap_or(false);
+        let landing = telemetry.is_landing().unwrap_or(false);
+        let vtol_fw = telemetry.vtol_in_forward_flight().unwrap_or(false);
+
         let alt = telemetry.altitude_m().unwrap_or(0.0);
         let rel = telemetry.relative_altitude_m().unwrap_or(0.0);
         let gs = telemetry.ground_speed_mps().unwrap_or(0.0);
         let vs = telemetry.vertical_speed_mps().unwrap_or(0.0);
-        let mode = telemetry.flight_mode();
+        let mode = telemetry.current_mode_name();
 
         egui::Grid::new("telemetry_grid")
             .num_columns(2)
@@ -147,18 +185,26 @@ impl DockContext {
                 stat_tile(
                     ui,
                     "FLIGHT MODE",
-                    mode.map(|m| format!("{m:?}")).unwrap_or_else(|| "—".to_owned()),
+                    mode.unwrap_or("Unknown"),
                     AMBER,
                 );
                 stat_tile(
                     ui,
-                    "ARMED",
-                    if armed { "ARMED" } else { "DISARMED" },
+                    "STATUS",
                     if armed {
-                        RED
+                        if flying {
+                            "Flying"
+                        } else if landing {
+                            "Landing"
+                        } else if vtol_fw {
+                            "VTOL FW"
+                        } else {
+                            "Armed"
+                        }
                     } else {
-                        GREEN
+                        "Disarmed"
                     },
+                    if armed { GREEN } else { RED },
                 );
                 ui.end_row();
             });
@@ -216,12 +262,12 @@ impl Default for EgcsApp {
         let [a, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
             0.5,
-            vec!["Actions".to_owned()],
+            vec!["Comm Link".to_owned(), "Actions".to_owned()],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             b,
             0.4,
-            vec!["Comm Link".to_owned(), "Telemetry".to_owned()],
+            vec!["Telemetry".to_owned()],
         );
 
         let mut open_tabs = HashSet::new();
@@ -304,86 +350,6 @@ impl eframe::App for EgcsApp {
         while let Some(status) = self.dock_context.status_rx.as_mut().and_then(|rx| rx.try_recv().ok()) {
             self.dock_context.conn_status = status;
         }
-
-        /*
-
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.horizontal(|ui| {
-                let connected = self.conn_status == ConnStatus::Connected;
-                let connecting = self.conn_status == ConnStatus::Connecting;
-
-                ui.label("UAV URL:");
-                ui.add_enabled(
-                    !connected && !connecting,
-                    egui::TextEdit::singleline(&mut self.connection_url),
-                );
-
-                let conn_label = match self.conn_status {
-                    ConnStatus::Connecting => "Connecting…",
-                    _ => "Connect",
-                };
-                if !connected {
-                    if ui.add_enabled(!connecting, egui::Button::new(conn_label)).clicked() {
-                        if let Some(tx) = &self.cmd_tx {
-                            let _ = tx.send(connection::Command::Connect(self.connection_url.clone()));
-                        }
-                        self.conn_status = ConnStatus::Connecting;
-                    }
-                }
-                if connected || connecting {
-                    if ui.button("Disconnect").clicked() {
-                        if let Some(tx) = &self.cmd_tx {
-                            let _ = tx.send(connection::Command::Disconnect);
-                        }
-                    }
-                }
-
-                let armed = if let Some(rx) = &mut self.telemetry_rx {
-                    rx.borrow().armed()
-                } else {
-                    Some(false)
-                };
-                let arm_label = if let Some(true) = armed { "Disarm" } else { "Arm" };
-                if connected {
-                    if ui.button(arm_label).clicked() {
-                        if let Some(tx) = &self.cmd_tx {
-                            let _ = tx.send(connection::Command::Vehicle(if let Some(true) = armed {
-                                connection::VehicleCommand::Disarm
-                            } else {
-                                connection::VehicleCommand::Arm
-                            }));
-                        }
-                    }
-                }
-
-                let takeoff_label = "Takeoff";
-                if connected {
-                    if ui.button(takeoff_label).clicked() {
-                        if let Some(tx) = &self.cmd_tx {
-                            let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Takeoff { altitude: 10.0 }));
-                        }
-                    }
-                }
-
-                if let ConnStatus::Failed(e) = &self.conn_status {
-                    ui.colored_label(egui::Color32::RED, format!("Failed: {e}"));
-                }
-
-                let altitude = if let Some(rx) = &mut self.telemetry_rx {
-                    rx.borrow().altitude_m().unwrap_or(0.0)
-                } else {
-                    0.0
-                };
-                let relative_altitude = if let Some(rx) = &mut self.telemetry_rx {
-                    rx.borrow().relative_altitude_m().unwrap_or(0.0)
-                } else {
-                    0.0
-                };
-                ui.label(format!("Relative Altitude: {relative_altitude} m"));
-                ui.label(format!("Altitude: {altitude} m"));
-            });
-        });*/
 
         let style = self
             .dock_context

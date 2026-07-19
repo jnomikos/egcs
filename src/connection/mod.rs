@@ -7,8 +7,7 @@ use mavlink::dialects::common::MavMessage;
 use mavlink::MavHeader;
 use std::sync::Arc;
 
-use crate::flight_mode::*;
-use crate::telemetry::Telemetry;
+use crate::telemetry::{Telemetry, ModeSelector};
 
 type Conn = Arc<Box<dyn mavlink::AsyncMavConnection<MavMessage> + Send + Sync>>;
 
@@ -26,7 +25,7 @@ pub enum VehicleCommand {
     Disarm,
     Takeoff { altitude: f32 },
     Land,
-    SetMode(FlightMode),
+    SetMode(ModeSelector),
 }
 
 #[derive(Default, PartialEq, Clone, Debug)]
