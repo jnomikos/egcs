@@ -71,6 +71,14 @@ impl Telemetry {
         self.global_position_int.as_ref().map(|p| p.relative_alt as f32 / 1000.0)
     }
 
+    pub fn ground_speed_mps(&self) -> Option<f32> {
+        self.global_position_int.as_ref().map(|p| p.vx as f32 / 100.0)
+    }
+
+    pub fn vertical_speed_mps(&self) -> Option<f32> {
+        self.global_position_int.as_ref().map(|p| p.vz as f32 / 100.0)
+    }
+
     pub fn armed(&self) -> Option<bool> {
         use mavlink::dialects::common::MavModeFlag;
         self.heartbeat.as_ref().map(|hb| hb.base_mode.contains(MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED))
