@@ -130,13 +130,6 @@ impl eframe::App for EgcsApp {
                 if let ConnStatus::Failed(e) = &self.conn_status {
                     ui.colored_label(egui::Color32::RED, format!("Failed: {e}"));
                 }
-
-                let altitude = if let Some(rx) = &mut self.telemetry_rx {
-                    rx.borrow().global_position_int.as_ref().map(|pos| pos.alt).unwrap_or(0)
-                } else {
-                    0
-                };
-                ui.label(format!("Altitude: {altitude}"));
             });
         });
     }

@@ -29,27 +29,25 @@ pub struct Telemetry {
 }
 
 impl Telemetry {
-    pub fn update(msg: &MavMessage) -> Self {
-        let mut telemetry = Telemetry::default();
+    pub fn update(&mut self, msg: &MavMessage) {
         match msg {
-            MavMessage::ATTITUDE(data) => telemetry.attitude = Some(data.clone()),
-            MavMessage::GPS_RAW_INT(data) => telemetry.gps_raw_int = Some(data.clone()),
-            MavMessage::GLOBAL_POSITION_INT(data) => telemetry.global_position_int = Some(data.clone()),
-            MavMessage::HEARTBEAT(data) => telemetry.heartbeat = Some(data.clone()),
-            MavMessage::SYS_STATUS(data) => telemetry.sys_status = Some(data.clone()),
+            MavMessage::ATTITUDE(data) => self.attitude = Some(data.clone()),
+            MavMessage::GPS_RAW_INT(data) => self.gps_raw_int = Some(data.clone()),
+            MavMessage::GLOBAL_POSITION_INT(data) => self.global_position_int = Some(data.clone()),
+            MavMessage::HEARTBEAT(data) => self.heartbeat = Some(data.clone()),
+            MavMessage::SYS_STATUS(data) => self.sys_status = Some(data.clone()),
             _ => {}
         }
-        telemetry
     }
 }
 
-struct Ui {
+struct AppHandle {
     status_tx: UnboundedSender<ConnStatus>,
     telemetry_tx: Sender<Telemetry>,
     ctx: eframe::egui::Context,
 }
 
-impl Ui {
+impl AppHandle {
     fn set(&self, status: ConnStatus) {
         let _ = self.status_tx.send(status);
         self.ctx.request_repaint();
@@ -62,16 +60,16 @@ pub async fn run(
     telemetry_tx: Sender<Telemetry>,
     ctx: eframe::egui::Context,
 ) {
-    let ui = Ui { status_tx, telemetry_tx, ctx };
+    let app_handle = AppHandle { status_tx, telemetry_tx, ctx };
 
     while let Some(url) = wait_for_connect(&mut cmd_rx).await {
         match connect(&url).await {
             Ok(conn) => {
-                ui.set(ConnStatus::Connecting);
-                connected(conn, &mut cmd_rx, &ui).await;
-                ui.set(ConnStatus::Disconnected);
+                app_handle.set(ConnStatus::Connecting);
+                connected(conn, &mut cmd_rx, &app_handle).await;
+                app_handle.set(ConnStatus::Disconnected);
             }
-            Err(e) => ui.set(ConnStatus::Failed(e.to_string())),
+            Err(e) => app_handle.set(ConnStatus::Failed(e.to_string())),
         }
     }
 }
@@ -91,18 +89,15 @@ async fn connect(url: &str) -> Result<Conn, Box<dyn std::error::Error>> {
     Ok(Arc::new(mavconn))
 }
 
-async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, ui: &Ui) {
+async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, app_handle: &AppHandle) {
     let _ = conn.send_default(&request_parameters()).await;
     let _ = conn.send_default(&request_stream()).await;
-
     loop {
         tokio::select! {
             incoming = conn.recv() => match incoming {
                 Ok((_header, msg)) => {
-                    ui.set(ConnStatus::Connected);
-                    let telemetry = Telemetry::update(&msg);
-                    let _ = ui.telemetry_tx.send(telemetry);
-                    println!("Received message: {:?}", msg);
+                    app_handle.set(ConnStatus::Connected);
+                    let _ = app_handle.telemetry_tx.send_modify(|t| t.update(&msg));
                 }
                 Err(e) => {
                     println!("Link error, disconnecting: {}", e);
