@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::watch::{Receiver, Sender};
-use crate::connection::Telemetry;
+use crate::telemetry::Telemetry;
 use crate::connection::{self, ConnStatus};
 use egui::{
     Ui, WidgetText
@@ -38,11 +38,70 @@ struct DockContext {
     telemetry_rx: Option<Receiver<Telemetry>>,
 }
 
+fn stat_tile(ui: &mut Ui, label: &str, value: impl Into<String>, color: egui::Color32) {
+    egui::Frame::group(ui.style())
+        .inner_margin(egui::Margin::same(8))
+        .show(ui, |ui| {
+            ui.vertical(|ui| {
+                ui.set_min_width(110.0);
+                ui.label(egui::RichText::new(label).size(12.0).weak());
+                ui.label(egui::RichText::new(value.into()).size(34.0).strong().color(color));
+            });
+        });
+}
+
+fn action_button(ui: &mut Ui, label: &str, color: egui::Color32) -> bool {
+    let luminance = 0.299 * color.r() as f32 + 0.587 * color.g() as f32 + 0.114 * color.b() as f32;
+    let text_color = if luminance > 140.0 {
+        egui::Color32::BLACK
+    } else {
+        egui::Color32::WHITE
+    };
+    let text = egui::RichText::new(label).size(18.0).strong().color(text_color);
+    let button = egui::Button::new((egui::Atom::grow(), text, egui::Atom::grow()))
+        .fill(color)
+        .corner_radius(6.0)
+        .min_size(egui::vec2(110.0, 40.0));
+    ui.add(button).clicked()
+}
+
 impl DockContext {
-    fn simple_demo_menu(&mut self, ui: &mut Ui) {
-        ui.label("Egui widget example");
-        ui.menu_button("Sub menu", |ui| {
-            ui.label("hello :)");
+    fn actions(&mut self, ui: &mut Ui) {
+        ui.vertical(|ui| {
+            let connected = self.conn_status == ConnStatus::Connected;
+            if !connected {
+                ui.label("Not connected to UAV.");
+                return;
+            }
+
+            let Some(rx) = &mut self.telemetry_rx else {
+                ui.label("No telemetry data available.");
+                return;
+            };
+
+            let armed = rx.borrow().armed().unwrap_or(false);
+
+            if armed {
+                if action_button(ui, "Disarm", egui::Color32::from_rgb(0xf4, 0x47, 0x47)) {
+                    if let Some(tx) = &self.cmd_tx {
+                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Disarm));
+                    }
+                }
+
+                if action_button(ui, "Takeoff", egui::Color32::from_rgb(0x56, 0x9c, 0xd6)) {
+                    if let Some(tx) = &self.cmd_tx {
+                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Takeoff { altitude: 20.0 }));
+                    }
+                }
+            } else {
+                if action_button(ui, "Arm", egui::Color32::from_rgb(0x6a, 0x99, 0x55)) {
+                    if let Some(tx) = &self.cmd_tx {
+                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Arm));
+                    }
+                }
+            }
+
+            
         });
     }
 
@@ -86,14 +145,53 @@ impl DockContext {
             return;
         }
 
-        if let Some(rx) = &mut self.telemetry_rx {
-            let telemetry = rx.borrow();
-            ui.label(format!("Armed: {}", telemetry.armed().unwrap_or(false)));
-            ui.label(format!("Altitude: {} m", telemetry.altitude_m().unwrap_or(0.0)));
-            ui.label(format!("Relative Altitude: {} m", telemetry.relative_altitude_m().unwrap_or(0.0)));
-        } else {
+        let Some(rx) = &mut self.telemetry_rx else {
             ui.label("No telemetry data available.");
-        }
+            return;
+        };
+        let telemetry = rx.borrow();
+
+        let armed = telemetry.armed().unwrap_or(false);
+        let alt = telemetry.altitude_m().unwrap_or(0.0);
+        let rel = telemetry.relative_altitude_m().unwrap_or(0.0);
+        let gs = telemetry.ground_speed_mps().unwrap_or(0.0);
+        let vs = telemetry.vertical_speed_mps().unwrap_or(0.0);
+        let mode = telemetry.flight_mode();
+
+        let teal = egui::Color32::from_rgb(0x4e, 0xc9, 0xb0);
+        let blue = egui::Color32::from_rgb(0x56, 0x9c, 0xd6);
+        let amber = egui::Color32::from_rgb(0xd7, 0xba, 0x7d);
+
+        egui::Grid::new("telemetry_grid")
+            .num_columns(2)
+            .spacing([8.0, 8.0])
+            .show(ui, |ui| {
+                stat_tile(ui, "ALTITUDE (m)", format!("{alt:.1}"), teal);
+                stat_tile(ui, "REL ALT (m)", format!("{rel:.1}"), teal);
+                ui.end_row();
+
+                stat_tile(ui, "GROUNDSPEED (m/s)", format!("{gs:.1}"), blue);
+                stat_tile(ui, "VERT SPEED (m/s)", format!("{vs:.1}"), blue);
+                ui.end_row();
+
+                stat_tile(
+                    ui,
+                    "FLIGHT MODE",
+                    mode.map(|m| format!("{m:?}")).unwrap_or_else(|| "—".to_owned()),
+                    amber,
+                );
+                stat_tile(
+                    ui,
+                    "ARMED",
+                    if armed { "ARMED" } else { "DISARMED" },
+                    if armed {
+                        egui::Color32::from_rgb(0xf4, 0x47, 0x47)
+                    } else {
+                        egui::Color32::from_rgb(0x6a, 0x99, 0x55)
+                    },
+                );
+                ui.end_row();
+            });
     }
 
     fn map(&mut self, ui: &mut Ui) {
@@ -113,6 +211,7 @@ impl TabViewer for DockContext {
             "Map" => self.map(ui),
             "Comm Link" => self.comm_link(ui),
             "Telemetry" => self.telemetry(ui),
+            "Actions" => self.actions(ui),
             _ => {
                 ui.label(tab.as_str());
             }
@@ -147,7 +246,7 @@ impl Default for EgcsApp {
         let [a, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
             0.5,
-            vec!["Inspector".to_owned()],
+            vec!["Actions".to_owned()],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             b,
@@ -200,7 +299,7 @@ impl EgcsApp {
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<connection::Command>();
         let (status_tx, status_rx) = tokio::sync::mpsc::unbounded_channel::<ConnStatus>();
         // Telemetry is receive only and thus should be a watch
-        let (telemetry_tx, _telemetry_rx) = tokio::sync::watch::channel::<connection::Telemetry>(connection::Telemetry::default());
+        let (telemetry_tx, _telemetry_rx) = tokio::sync::watch::channel::<Telemetry>(Telemetry::default());
         
         let ctx = cc.egui_ctx.clone();
 
