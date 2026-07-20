@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::watch::{Receiver};
+use tokio::sync::watch::Receiver;
 use crate::telemetry::Telemetry;
 use crate::connection::{self, ConnStatus};
 use super::theme::*;
@@ -10,8 +10,7 @@ use egui::{
     Ui, WidgetText
 };
 use egui_dock::{
-    AllowedSplits, DockArea, DockState, NodeIndex, NodePath, OverlayType, Style, SurfaceIndex,
-    TabInteractionStyle, TabViewer, tab_viewer::OnCloseResponse,
+    AllowedSplits, DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer, tab_viewer::OnCloseResponse,
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -270,7 +269,7 @@ impl Default for EgcsApp {
         let mut dock_state =
             DockState::new(vec!["Map".to_owned()]);
         "Undock".clone_into(&mut dock_state.translations.tab_context_menu.eject_button);
-        let [a, b] = dock_state.main_surface_mut().split_left(
+        let [_, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
             0.5,
             vec!["Comm Link".to_owned(), "Actions".to_owned()],

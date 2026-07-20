@@ -13,7 +13,6 @@ use mavlink::MavHeader;
 pub struct Telemetry {
     pub extended_sys_state: Option<mavlink::dialects::common::EXTENDED_SYS_STATE_DATA>,
     pub attitude: Option<mavlink::dialects::common::ATTITUDE_DATA>,
-    pub gps_raw_int: Option<mavlink::dialects::common::GPS_RAW_INT_DATA>,
     pub global_position_int: Option<mavlink::dialects::common::GLOBAL_POSITION_INT_DATA>,
     pub heartbeat: Option<mavlink::dialects::common::HEARTBEAT_DATA>,
     pub sys_status: Option<mavlink::dialects::common::SYS_STATUS_DATA>,
