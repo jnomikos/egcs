@@ -1,14 +1,15 @@
+use mavlink::dialects::common::MavMessage;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::watch::Sender;
-use mavlink::dialects::common::MavMessage;
 
+use super::{Command, Conn, ConnStatus, GCS_HEADER};
 use crate::telemetry::Telemetry;
-use super::{
-    Conn, ConnStatus, Command, GCS_HEADER
-};
 
-use super::protocol::{handle_vehicle_command, request_parameters, request_stream, request_available_modes, gcs_heartbeat};
+use super::protocol::{
+    gcs_heartbeat, handle_vehicle_command, request_available_modes, request_parameters,
+    request_stream,
+};
 
 pub async fn run(
     mut cmd_rx: UnboundedReceiver<Command>,
@@ -16,7 +17,11 @@ pub async fn run(
     telemetry_tx: Sender<Telemetry>,
     ctx: eframe::egui::Context,
 ) {
-    let app_handle = AppHandle { status_tx, telemetry_tx, ctx };
+    let app_handle = AppHandle {
+        status_tx,
+        telemetry_tx,
+        ctx,
+    };
 
     while let Some(url) = wait_for_connect(&mut cmd_rx).await {
         match connect(&url).await {
@@ -99,7 +104,9 @@ async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, app_hand
 
 async fn wait_for_connect(cmd_rx: &mut UnboundedReceiver<Command>) -> Option<String> {
     while let Some(cmd) = cmd_rx.recv().await {
-        if let Command::Connect(url) = cmd { return Some(url); }
+        if let Command::Connect(url) = cmd {
+            return Some(url);
+        }
     }
     None // channel closed
 }

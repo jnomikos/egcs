@@ -1,10 +1,10 @@
 use egui::{Color32, Ui};
 
 /// Reusuable color palette
-pub const RED:   Color32 = Color32::from_rgb(0xf4, 0x47, 0x47);
+pub const RED: Color32 = Color32::from_rgb(0xf4, 0x47, 0x47);
 pub const GREEN: Color32 = Color32::from_rgb(0x6a, 0x99, 0x55);
-pub const BLUE:  Color32 = Color32::from_rgb(0x56, 0x9c, 0xd6);
-pub const TEAL:  Color32 = Color32::from_rgb(0x4e, 0xc9, 0xb0);
+pub const BLUE: Color32 = Color32::from_rgb(0x56, 0x9c, 0xd6);
+pub const TEAL: Color32 = Color32::from_rgb(0x4e, 0xc9, 0xb0);
 pub const AMBER: Color32 = Color32::from_rgb(0xd7, 0xba, 0x7d);
 
 const WIDGET_WIDTH: f32 = 150.0;
@@ -24,20 +24,29 @@ pub fn stat_tile(ui: &mut Ui, label: &str, value: impl Into<String>, color: egui
             ui.vertical(|ui| {
                 ui.set_min_width(WIDGET_WIDTH);
                 ui.label(egui::RichText::new(label).size(12.0).weak());
-                ui.label(egui::RichText::new(value.into()).size(34.0).strong().color(color));
+                ui.label(
+                    egui::RichText::new(value.into())
+                        .size(34.0)
+                        .strong()
+                        .color(color),
+                );
             });
         });
 }
 
 pub fn action_button(ui: &mut Ui, label: &str, color: egui::Color32) -> bool {
-    let luminance = LUMA_R * color.r() as f32 + LUMA_G * color.g() as f32 + LUMA_B * color.b() as f32;
+    let luminance =
+        LUMA_R * color.r() as f32 + LUMA_G * color.g() as f32 + LUMA_B * color.b() as f32;
     let luma_threshold = LUMA_THRESHOLD * 255.0;
     let text_color = if luminance > luma_threshold {
         egui::Color32::BLACK
     } else {
         egui::Color32::WHITE
     };
-    let text = egui::RichText::new(label).size(18.0).strong().color(text_color);
+    let text = egui::RichText::new(label)
+        .size(18.0)
+        .strong()
+        .color(text_color);
     let button = egui::Button::new((egui::Atom::grow(), text, egui::Atom::grow()))
         .fill(color)
         .corner_radius(6.0)

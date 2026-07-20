@@ -1,17 +1,16 @@
+use super::map;
+use super::theme::*;
+use crate::connection::{self, ConnStatus};
+use crate::telemetry::Telemetry;
+use egui::{Ui, WidgetText};
+use egui_dock::{
+    AllowedSplits, DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer,
+    tab_viewer::OnCloseResponse,
+};
 use std::collections::HashSet;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::watch::Receiver;
-use crate::telemetry::Telemetry;
-use crate::connection::{self, ConnStatus};
-use super::theme::*;
-use super::map;
 use walkers::{MapMemory, Position};
-use egui::{
-    Ui, WidgetText
-};
-use egui_dock::{
-    AllowedSplits, DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer, tab_viewer::OnCloseResponse,
-};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct DockContext {
@@ -65,31 +64,38 @@ impl DockContext {
             if armed && !flying {
                 if action_button(ui, "Disarm", RED) {
                     if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Disarm));
+                        let _ = tx.send(connection::Command::Vehicle(
+                            connection::VehicleCommand::Disarm,
+                        ));
                     }
                 }
 
                 if action_button(ui, "Takeoff", BLUE) {
                     if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Takeoff { altitude: 20.0 }));
+                        let _ = tx.send(connection::Command::Vehicle(
+                            connection::VehicleCommand::Takeoff { altitude: 20.0 },
+                        ));
                     }
                 }
             } else if armed && flying && !landing {
                 if action_button(ui, "Land", AMBER) {
                     if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Land));
+                        let _ = tx.send(connection::Command::Vehicle(
+                            connection::VehicleCommand::Land,
+                        ));
                     }
                 }
             } else if !armed {
                 if action_button(ui, "Arm", GREEN) {
                     if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(connection::VehicleCommand::Arm));
+                        let _ = tx.send(connection::Command::Vehicle(
+                            connection::VehicleCommand::Arm,
+                        ));
                     }
                 }
             }
-            
+
             Self::flight_mode_selector(ui, &rx_borrowed, &self.cmd_tx);
-            
         });
     }
 
@@ -105,7 +111,10 @@ impl DockContext {
             .selected_text(telemetry.current_mode_name().unwrap_or("Unknown"))
             .show_ui(ui, |ui| {
                 for mode in telemetry.selectable_modes() {
-                    if ui.selectable_label(current == Some(mode.selector), &mode.name).clicked() {
+                    if ui
+                        .selectable_label(current == Some(mode.selector), &mode.name)
+                        .clicked()
+                    {
                         if let Some(tx) = cmd_tx {
                             let _ = tx.send(connection::Command::Vehicle(
                                 connection::VehicleCommand::SetMode(mode.selector),
@@ -132,7 +141,10 @@ impl DockContext {
                 _ => "Connect",
             };
             if !connected {
-                if ui.add_enabled(!connecting, egui::Button::new(conn_label)).clicked() {
+                if ui
+                    .add_enabled(!connecting, egui::Button::new(conn_label))
+                    .clicked()
+                {
                     if let Some(tx) = &self.cmd_tx {
                         let _ = tx.send(connection::Command::Connect(self.connection_url.clone()));
                     }
@@ -185,12 +197,7 @@ impl DockContext {
                 stat_tile(ui, "VERT SPEED (m/s)", format!("{vs:.1}"), BLUE);
                 ui.end_row();
 
-                stat_tile(
-                    ui,
-                    "FLIGHT MODE",
-                    mode.unwrap_or("Unknown"),
-                    AMBER,
-                );
+                stat_tile(ui, "FLIGHT MODE", mode.unwrap_or("Unknown"), AMBER);
                 stat_tile(
                     ui,
                     "STATUS",
@@ -288,19 +295,17 @@ pub struct EgcsApp {
 
 impl Default for EgcsApp {
     fn default() -> Self {
-        let mut dock_state =
-            DockState::new(vec!["Map".to_owned()]);
+        let mut dock_state = DockState::new(vec!["Map".to_owned()]);
         "Undock".clone_into(&mut dock_state.translations.tab_context_menu.eject_button);
         let [_, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
             0.5,
             vec!["Comm Link".to_owned(), "Actions".to_owned()],
         );
-        let [_, _] = dock_state.main_surface_mut().split_below(
-            b,
-            0.4,
-            vec!["Telemetry".to_owned()],
-        );
+        let [_, _] =
+            dock_state
+                .main_surface_mut()
+                .split_below(b, 0.4, vec!["Telemetry".to_owned()]);
 
         let mut open_tabs = HashSet::new();
 
@@ -344,12 +349,13 @@ impl EgcsApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-        
+
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<connection::Command>();
         let (status_tx, status_rx) = tokio::sync::mpsc::unbounded_channel::<ConnStatus>();
         // Telemetry is receive only and thus should be a watch
-        let (telemetry_tx, _telemetry_rx) = tokio::sync::watch::channel::<Telemetry>(Telemetry::default());
-        
+        let (telemetry_tx, _telemetry_rx) =
+            tokio::sync::watch::channel::<Telemetry>(Telemetry::default());
+
         let ctx = cc.egui_ctx.clone();
 
         std::thread::spawn(move || {
@@ -365,8 +371,9 @@ impl EgcsApp {
         app.dock_context.cmd_tx = Some(cmd_tx);
         app.dock_context.status_rx = Some(status_rx);
         app.dock_context.telemetry_rx = Some(_telemetry_rx);
-        let map_state: Option<(MapMemory, Position)> =
-            cc.storage.and_then(|s| eframe::get_value(s, map::STORAGE_KEY));
+        let map_state: Option<(MapMemory, Position)> = cc
+            .storage
+            .and_then(|s| eframe::get_value(s, map::STORAGE_KEY));
         app.dock_context.map = Some(map::MapView::new(cc.egui_ctx.clone(), map_state));
         app
     }
@@ -386,7 +393,12 @@ impl eframe::App for EgcsApp {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
 
-        while let Some(status) = self.dock_context.status_rx.as_mut().and_then(|rx| rx.try_recv().ok()) {
+        while let Some(status) = self
+            .dock_context
+            .status_rx
+            .as_mut()
+            .and_then(|rx| rx.try_recv().ok())
+        {
             self.dock_context.conn_status = status;
         }
 

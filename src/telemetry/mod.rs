@@ -5,9 +5,9 @@ mod vehicle_state;
 pub use flight_modes::{AvailableMode, ModeSelector};
 use flight_modes::{mode_selector, standard_mode_label};
 
-use std::collections::BTreeMap;
-use mavlink::dialects::common::{MavMessage, MavModeProperty, CURRENT_MODE_DATA};
 use mavlink::MavHeader;
+use mavlink::dialects::common::{CURRENT_MODE_DATA, MavMessage, MavModeProperty};
+use std::collections::BTreeMap;
 
 #[derive(Default, Clone)]
 pub struct Telemetry {
@@ -39,11 +39,16 @@ impl Telemetry {
                     Ok(s) if !s.is_empty() => s.to_owned(),
                     _ => standard_mode_label(data.standard_mode).to_owned(),
                 };
-                self.available_modes.insert(data.mode_index, AvailableMode {
-                    name,
-                    user_selectable: !data.properties.contains(MavModeProperty::MAV_MODE_PROPERTY_NOT_USER_SELECTABLE),
-                    selector: mode_selector(data.standard_mode, data.custom_mode),
-                });
+                self.available_modes.insert(
+                    data.mode_index,
+                    AvailableMode {
+                        name,
+                        user_selectable: !data
+                            .properties
+                            .contains(MavModeProperty::MAV_MODE_PROPERTY_NOT_USER_SELECTABLE),
+                        selector: mode_selector(data.standard_mode, data.custom_mode),
+                    },
+                );
             }
             MavMessage::CURRENT_MODE(data) => self.current_mode = Some(data.clone()),
             MavMessage::COMMAND_ACK(data) => {

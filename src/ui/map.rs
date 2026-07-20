@@ -1,9 +1,9 @@
+use super::theme;
 use egui::{Context, Response, Ui};
 use walkers::{
     HttpTiles, Map, MapMemory, Plugin, Position, Projector, TileId, Tiles, lat_lon,
     sources::{Attribution, TileSource},
 };
-use super::theme;
 
 pub const STORAGE_KEY: &str = "map_view";
 

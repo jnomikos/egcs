@@ -1,5 +1,5 @@
 mod app;
-mod theme;
 mod map;
+mod theme;
 
 pub use app::EgcsApp;
