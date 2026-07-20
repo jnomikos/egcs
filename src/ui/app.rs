@@ -5,7 +5,7 @@ use crate::telemetry::Telemetry;
 use crate::connection::{self, ConnStatus};
 use super::theme::*;
 use super::map;
-use walkers::{HttpTiles, MapMemory, lon_lat};
+use walkers::{MapMemory, Position};
 use egui::{
     Ui, WidgetText
 };
@@ -29,10 +29,7 @@ struct DockContext {
     secondary_button_on_modifier: bool,
     secondary_button_context_menu: bool,
     #[serde(skip)]
-    tiles: Option<HttpTiles>,
-    #[serde(skip)]
-    reference_tiles: Option<HttpTiles>,
-    map_memory: MapMemory,
+    map: Option<map::MapView>,
 
     connection_url: String,
     #[serde(skip)]
@@ -217,11 +214,27 @@ impl DockContext {
     }
 
     fn map(&mut self, ui: &mut Ui) {
-        let (Some(tiles), Some(reference)) = (self.tiles.as_mut(), self.reference_tiles.as_mut()) else {
+        let Some(map) = self.map.as_mut() else {
             ui.label("Map unavailable.");
             return;
         };
-        map::show(ui, tiles, reference, &mut self.map_memory, lon_lat(17.03664, 51.09916));
+
+        let connected = self.conn_status == ConnStatus::Connected;
+        let marker = if connected {
+            self.telemetry_rx.as_ref().and_then(|rx| {
+                let t = rx.borrow();
+                match (t.latitude_deg(), t.longitude_deg()) {
+                    (Some(lat), Some(lon)) => {
+                        Some(map::VehicleMarker::new(lat, lon, t.heading_deg()))
+                    }
+                    _ => None,
+                }
+            })
+        } else {
+            None
+        };
+
+        map.show(ui, marker);
     }
 }
 
@@ -303,9 +316,7 @@ impl Default for EgcsApp {
             show_secondary_button_hint: true,
             secondary_button_on_modifier: false,
             secondary_button_context_menu: false,
-            tiles: None,
-            reference_tiles: None,
-            map_memory: MapMemory::default(),
+            map: None,
             connection_url: "udpin:0.0.0.0:14550".to_owned(),
             conn_status: ConnStatus::Disconnected,
             cmd_tx: None,
@@ -345,8 +356,9 @@ impl EgcsApp {
         app.dock_context.cmd_tx = Some(cmd_tx);
         app.dock_context.status_rx = Some(status_rx);
         app.dock_context.telemetry_rx = Some(_telemetry_rx);
-        app.dock_context.tiles = Some(map::imagery_tiles(cc.egui_ctx.clone()));
-        app.dock_context.reference_tiles = Some(map::reference_tiles(cc.egui_ctx.clone()));
+        let map_state: Option<(MapMemory, Position)> =
+            cc.storage.and_then(|s| eframe::get_value(s, map::STORAGE_KEY));
+        app.dock_context.map = Some(map::MapView::new(cc.egui_ctx.clone(), map_state));
         app
     }
 }
@@ -355,6 +367,9 @@ impl eframe::App for EgcsApp {
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
+        if let Some(map) = &self.dock_context.map {
+            eframe::set_value(storage, map::STORAGE_KEY, &map.persist());
+        }
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
