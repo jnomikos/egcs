@@ -184,7 +184,7 @@ impl Plugin for VehiclePlugin {
                     center,
                     6.0,
                     theme::RED,
-                    egui::Stroke::new(1.5, egui::Color32::BLACK),
+                    egui::Stroke::new(1.5_f32, egui::Color32::BLACK),
                 );
             }
         }
