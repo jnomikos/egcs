@@ -1077,8 +1077,6 @@ dependencies = [
  "serde",
  "tokio",
  "walkers",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]

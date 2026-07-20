@@ -39,7 +39,7 @@ All of this together creates an architecture that can be used to fly a drone in 
   │  │  ├─ app.rs             # top-level app, panels, command dispatch
   │  │  ├─ map.rs             # satellite map + vehicle marker (walkers)
   │  │  └─ theme.rs           # shared widgets and styling
-  │  ├─ main.rs               # native + wasm entry points
+  │  ├─ main.rs               # native entry points
   │  └─ lib.rs                # crate root
 
 ```
