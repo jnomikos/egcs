@@ -24,6 +24,10 @@ pub async fn handle_vehicle_command(
         }
         VehicleCommand::Land => {
             command_long(target_system, MavCmd::MAV_CMD_NAV_LAND, [0.0; 7])
+        },
+        VehicleCommand::DoReposition { latitude_deg, longitude_deg } => {
+            let hold_amsl = telemetry.altitude_m().unwrap_or(f32::NAN);
+            command_int(target_system, MavCmd::MAV_CMD_DO_REPOSITION, [-1.0, 1.0, 0.0, f32::NAN], latitude_deg, longitude_deg, hold_amsl)
         }
         VehicleCommand::SetMode(ModeSelector::Custom(custom_mode)) => {
             let main = (custom_mode >> 16) & 0xFF;
@@ -54,6 +58,25 @@ fn command_long(target_system: u8, command: mavlink::dialects::common::MavCmd, p
         target_system,
         target_component: MavComponent::MAV_COMP_ID_AUTOPILOT1 as u8,
         confirmation: 0,
+    })
+}
+
+fn command_int(target_system: u8, command: mavlink::dialects::common::MavCmd, params: [f32; 4], x: i32, y: i32, z: f32) -> MavMessage {
+    use mavlink::dialects::common::{COMMAND_INT_DATA, MavComponent};
+    MavMessage::COMMAND_INT(COMMAND_INT_DATA {
+        param1: params[0],
+        param2: params[1],
+        param3: params[2],
+        param4: params[3],
+        x,
+        y,
+        z,
+        command,
+        target_system,
+        target_component: MavComponent::MAV_COMP_ID_AUTOPILOT1 as u8,
+        frame: mavlink::dialects::common::MavFrame::MAV_FRAME_GLOBAL,
+        current: 0, // unused
+        autocontinue: 0, // unused
     })
 }
 

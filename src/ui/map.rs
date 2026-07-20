@@ -22,12 +22,22 @@ impl VehicleMarker {
     }
 }
 
+pub enum MapAction {
+    Goto(Position),
+}
+
+struct GotoPrompt {
+    position: Position,
+    screen_pos: egui::Pos2,
+}
+
 pub struct MapView {
     tiles: HttpTiles,
     reference_tiles: HttpTiles,
     map_memory: MapMemory,
     vehicle_marker: Option<VehicleMarker>,
     last_position: Position,
+    goto_prompt: Option<GotoPrompt>,
 }
 
 impl MapView {
@@ -44,6 +54,7 @@ impl MapView {
             map_memory,
             vehicle_marker: None,
             last_position,
+            goto_prompt: None,
         }
     }
 
@@ -51,7 +62,7 @@ impl MapView {
         (&self.map_memory, &self.last_position)
     }
 
-    pub fn show(&mut self, ui: &mut Ui, vehicle: Option<VehicleMarker>) {
+    pub fn show(&mut self, ui: &mut Ui, vehicle: Option<VehicleMarker>) -> Option<MapAction> {
         let acquired = self.vehicle_marker.is_none() && vehicle.is_some();
         self.vehicle_marker = vehicle;
         if let Some(marker) = &self.vehicle_marker {
@@ -64,6 +75,10 @@ impl MapView {
 
         let credit = self.tiles.attribution().text;
 
+        if self.vehicle_marker.is_none() {
+            self.goto_prompt = None;
+        }
+
         let mut map = Map::new(
             Some(&mut self.tiles),
             &mut self.map_memory,
@@ -73,13 +88,72 @@ impl MapView {
         .zoom_with_ctrl(false);
 
         if let Some(marker) = &self.vehicle_marker {
-            map = map.with_plugin(VehiclePlugin {
-                marker: marker.clone(),
-            });
+            map = map
+                .with_plugin(VehiclePlugin {
+                    marker: marker.clone(),
+                })
+                .with_plugin(ClickPlugin {
+                    prompt: &mut self.goto_prompt,
+                });
         }
 
         let response = ui.add(map);
         draw_attribution(ui, &response, credit);
+        self.goto_popup(ui)
+    }
+
+    fn goto_popup(&mut self, ui: &Ui) -> Option<MapAction> {
+        let prompt = self.goto_prompt.as_ref()?;
+        let mut action = None;
+        let mut dismiss = false;
+
+        egui::Area::new(egui::Id::new("map_goto_prompt"))
+            .fixed_pos(prompt.screen_pos)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.button("Fly here").clicked() {
+                            action = Some(MapAction::Goto(prompt.position.clone()));
+                            dismiss = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            dismiss = true;
+                        }
+                    });
+                });
+            });
+
+        if dismiss {
+            self.goto_prompt = None;
+        }
+        action
+    }
+}
+
+struct ClickPlugin<'a> {
+    prompt: &'a mut Option<GotoPrompt>,
+}
+
+impl Plugin for ClickPlugin<'_> {
+    fn run(
+        self: Box<Self>,
+        _ui: &mut Ui,
+        response: &Response,
+        projector: &Projector,
+        _map_memory: &MapMemory,
+    ) {
+        if response.clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                *self.prompt = Some(GotoPrompt {
+                    position: projector.unproject(pos.to_vec2()),
+                    screen_pos: pos,
+                });
+            }
+        }
+
+        if let Some(prompt) = self.prompt.as_mut() {
+            prompt.screen_pos = projector.project(prompt.position.clone()).to_pos2();
+        }
     }
 }
 

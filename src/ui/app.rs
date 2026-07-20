@@ -234,7 +234,16 @@ impl DockContext {
             None
         };
 
-        map.show(ui, marker);
+        if let Some(map::MapAction::Goto(pos)) = map.show(ui, marker) {
+            if let Some(tx) = &self.cmd_tx {
+                let _ = tx.send(connection::Command::Vehicle(
+                    connection::VehicleCommand::DoReposition {
+                        latitude_deg: (pos.y() * 1e7) as i32,
+                        longitude_deg: (pos.x() * 1e7) as i32,
+                    },
+                ));
+            }
+        }
     }
 }
 

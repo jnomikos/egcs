@@ -24,6 +24,7 @@ pub enum VehicleCommand {
     Arm,
     Disarm,
     Takeoff { altitude: f32 },
+    DoReposition { latitude_deg: i32, longitude_deg: i32 },
     Land,
     SetMode(ModeSelector),
 }
