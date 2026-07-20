@@ -1,7 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-mod app;
-pub use app::EgcsApp;
-mod theme;
+mod ui;
+pub use ui::EgcsApp;
 mod connection;
 mod telemetry;
