@@ -61,3 +61,33 @@ impl Telemetry {
             .map(|m| m.name.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn available_modes_filtered_correctly() {
+        let mut telemetry = Telemetry::default();
+        telemetry.available_modes.insert(
+            0,
+            AvailableMode {
+                name: "mode1".to_owned(),
+                user_selectable: true,
+                selector: ModeSelector::Standard(0),
+            },
+        );
+        telemetry.available_modes.insert(
+            1,
+            AvailableMode {
+                name: "mode2".to_owned(),
+                user_selectable: false,
+                selector: ModeSelector::Standard(1),
+            },
+        );
+
+        let selectable: Vec<_> = telemetry.selectable_modes().collect();
+        assert_eq!(selectable.len(), 1);
+        assert_eq!(selectable[0].name, "mode1");
+    }
+}

@@ -58,3 +58,34 @@ impl Telemetry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn system_id_populates_on_heartbeat() {
+        let mut telemetry = Telemetry::default();
+        assert_eq!(telemetry.system_id, None);
+        assert_eq!(telemetry.component_id, None);
+
+        let header = mavlink::MavHeader {
+            system_id: 1,
+            component_id: 2,
+            sequence: 0,
+        };
+        let msg = mavlink::dialects::common::MavMessage::HEARTBEAT(
+            mavlink::dialects::common::HEARTBEAT_DATA {
+                custom_mode: 0,
+                mavtype: mavlink::dialects::common::MavType::MAV_TYPE_GENERIC,
+                autopilot: mavlink::dialects::common::MavAutopilot::MAV_AUTOPILOT_GENERIC,
+                base_mode: mavlink::dialects::common::MavModeFlag::empty(),
+                system_status: mavlink::dialects::common::MavState::MAV_STATE_UNINIT,
+                mavlink_version: 3,
+            },
+        );
+        telemetry.update(&header, &msg);
+        assert_eq!(telemetry.system_id, Some(1));
+        assert_eq!(telemetry.component_id, Some(2));
+    }
+}

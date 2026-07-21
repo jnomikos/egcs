@@ -2,7 +2,7 @@ use mavlink::dialects::common::MavStandardMode;
 
 /// Standard modes use `MAV_CMD_DO_SET_STANDARD_MODE`,
 /// custom (flight-stack-specific) modes use `MAV_CMD_DO_SET_MODE`.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModeSelector {
     Standard(u8),
     Custom(u32),
@@ -34,5 +34,30 @@ pub(super) fn mode_selector(standard_mode: MavStandardMode, custom_mode: u32) ->
         ModeSelector::Custom(custom_mode)
     } else {
         ModeSelector::Standard(standard_mode as u8)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_standard_modes_maps_to_custom() {
+        let sel = mode_selector(MavStandardMode::MAV_STANDARD_MODE_NON_STANDARD, 7);
+        assert_eq!(
+            sel,
+            ModeSelector::Custom(7),
+            "non-standard should carry custom_mode"
+        );
+    }
+
+    #[test]
+    fn standard_mode_maps_to_standard() {
+        let sel = mode_selector(MavStandardMode::MAV_STANDARD_MODE_LAND, 7);
+        assert_eq!(
+            sel,
+            ModeSelector::Standard(MavStandardMode::MAV_STANDARD_MODE_LAND as u8),
+            "standard should carry standard_mode as u8"
+        );
     }
 }

@@ -50,7 +50,6 @@ All of this together creates an architecture that can be used to fly a drone in 
 - **Missing Heartbeat Timeout & Connection State Machine:** Once connected, the backend lacks a heartbeat timeout monitor to detect lost telemetry streams. Additionally, there is no intermediate "Communication Lost" state to maintain the UI layout and attempt auto-reconnection before requiring a manual disconnect.
 - **PX4 1.15+ Mode Requirements:** Relies on the modern `AVAILABLE_MODES` MAVLink interface, requiring PX4 v1.15 or newer (legacy custom mode mapping is omitted for scope).
 - **PX4-Specific Dialect:** Tailored exclusively to PX4 flight stack conventions; ArduPilot custom mode flags and command sets are not supported.
-- **No test-coverage yet**: Need to add unit tests.
 
 ## Future Scope
 - [ ] **Parameter Management:** Full fetch, search, edit, and onboard parameter syncing (`PARAM_EXT_REQUEST_READ` / `PARAM_SET`).
