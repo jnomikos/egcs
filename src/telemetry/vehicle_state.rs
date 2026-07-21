@@ -60,12 +60,4 @@ impl Telemetry {
             .find(|m| m.selector == current)
             .map(|m| m.name.as_str())
     }
-
-    /*
-    /// True when the vehicle could not enter (or fell out of) the last commanded mode.
-    pub fn mode_change_rejected(&self) -> bool {
-        self.current_mode.as_ref().is_some_and(|c| {
-            c.intended_custom_mode != 0 && c.intended_custom_mode != c.custom_mode
-        })
-    }*/
 }
