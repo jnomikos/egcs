@@ -1,6 +1,6 @@
 use mavlink::dialects::common::MavMessage;
 use std::sync::Arc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::watch::Sender;
 
 use super::{Command, Conn, ConnStatus, GCS_HEADER};
@@ -13,7 +13,7 @@ use super::protocol::{
 
 pub async fn run(
     mut cmd_rx: UnboundedReceiver<Command>,
-    status_tx: UnboundedSender<ConnStatus>,
+    status_tx: Sender<ConnStatus>,
     telemetry_tx: Sender<Telemetry>,
     ctx: eframe::egui::Context,
 ) {
@@ -36,14 +36,14 @@ pub async fn run(
 }
 
 struct AppHandle {
-    status_tx: UnboundedSender<ConnStatus>,
+    status_tx: Sender<ConnStatus>,
     telemetry_tx: Sender<Telemetry>,
     ctx: eframe::egui::Context,
 }
 
 impl AppHandle {
     fn set(&self, status: ConnStatus) {
-        self.status_tx.send(status).ok();
+        self.status_tx.send_replace(status);
         self.ctx.request_repaint();
     }
 }

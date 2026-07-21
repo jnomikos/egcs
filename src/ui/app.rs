@@ -8,7 +8,7 @@ use egui_dock::{
     tab_viewer::OnCloseResponse,
 };
 use std::collections::HashSet;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch::Receiver;
 use walkers::{MapMemory, Position};
 
@@ -36,7 +36,7 @@ struct DockContext {
     #[serde(skip)]
     cmd_tx: Option<UnboundedSender<connection::Command>>,
     #[serde(skip)]
-    status_rx: Option<UnboundedReceiver<ConnStatus>>,
+    status_rx: Option<Receiver<ConnStatus>>,
     #[serde(skip)]
     telemetry_rx: Option<Receiver<Telemetry>>,
 }
@@ -354,8 +354,10 @@ impl EgcsApp {
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<connection::Command>();
-        let (status_tx, status_rx) = tokio::sync::mpsc::unbounded_channel::<ConnStatus>();
-        // Telemetry is receive only and thus should be a watch
+        // Status and telemetry are both latest-wins state the UI only reads, so
+        // they are watch channels: they hold one value and cannot grow unbounded.
+        let (status_tx, status_rx) =
+            tokio::sync::watch::channel::<ConnStatus>(ConnStatus::Disconnected);
         let (telemetry_tx, _telemetry_rx) =
             tokio::sync::watch::channel::<Telemetry>(Telemetry::default());
 
@@ -396,13 +398,8 @@ impl eframe::App for EgcsApp {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
 
-        while let Some(status) = self
-            .dock_context
-            .status_rx
-            .as_mut()
-            .and_then(|rx| rx.try_recv().ok())
-        {
-            self.dock_context.conn_status = status;
+        if let Some(rx) = &self.dock_context.status_rx {
+            self.dock_context.conn_status = rx.borrow().clone();
         }
 
         let style = self

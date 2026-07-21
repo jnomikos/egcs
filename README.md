@@ -15,7 +15,7 @@ https://github.com/user-attachments/assets/cacfab63-7f04-4396-9ae7-a0bd5136023a
 
 eGCS is designed to be quick, responsive and **never** hold the main UI thread, so that users always see the most up-to-date information, and their commands get sent as soon as possible. To accomplish this, the egui frontend is separated from all MAVLink I/O by running the connection on a dedicated thread hosting a tokio runtime. On this backend thread, a tokio::select! loop concurrently handles inbound telemetry, outbound commands, and a 1 Hz GCS heartbeat. Communication to/from the tokio runtime thread and the UI is done using channels.
 
-Three channels currently cross the thread boundary. First is an mpsc channel that handles commands from the UI to the backend (e.g. connect, disconnect, arm, takeoff). Next is an mpsc channel that reports connection status back to the UI (specifically link state, for now). Finally, there's a watch channel that reports the latest telemetry snapshot.
+Three channels currently cross the thread boundary. First is an mpsc channel that handles commands from the UI to the backend (e.g. connect, disconnect, arm, takeoff). Next is a watch channel that reports connection status back to the UI (specifically link state, for now). Finally, there's a watch channel that reports the latest telemetry snapshot.
 
 All of this together creates an architecture that can be used to fly a drone in real time.
 
