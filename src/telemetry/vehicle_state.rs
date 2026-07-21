@@ -10,42 +10,37 @@ impl Telemetry {
     }
 
     pub fn is_flying(&self) -> Option<bool> {
-        use MavLandedState::*;
-        self.extended_sys_state
-            .as_ref()
-            .and_then(|s| match s.landed_state {
-                MAV_LANDED_STATE_ON_GROUND => Some(false),
-                MAV_LANDED_STATE_TAKEOFF | MAV_LANDED_STATE_IN_AIR | MAV_LANDED_STATE_LANDING => {
-                    Some(true)
-                }
-                MAV_LANDED_STATE_UNDEFINED => None,
-            })
+        let state = self.extended_sys_state.as_ref()?;
+        match state.landed_state {
+            MavLandedState::MAV_LANDED_STATE_ON_GROUND => Some(false),
+            MavLandedState::MAV_LANDED_STATE_TAKEOFF
+            | MavLandedState::MAV_LANDED_STATE_IN_AIR
+            | MavLandedState::MAV_LANDED_STATE_LANDING => Some(true),
+            MavLandedState::MAV_LANDED_STATE_UNDEFINED => None,
+        }
     }
 
     pub fn is_landing(&self) -> Option<bool> {
-        use MavLandedState::*;
-        self.extended_sys_state
-            .as_ref()
-            .and_then(|s| match s.landed_state {
-                MAV_LANDED_STATE_LANDING => Some(true),
-                MAV_LANDED_STATE_ON_GROUND | MAV_LANDED_STATE_TAKEOFF | MAV_LANDED_STATE_IN_AIR => {
-                    Some(false)
-                }
-                MAV_LANDED_STATE_UNDEFINED => None,
-            })
+        let state = self.extended_sys_state.as_ref()?;
+        match state.landed_state {
+            MavLandedState::MAV_LANDED_STATE_LANDING => Some(true),
+            MavLandedState::MAV_LANDED_STATE_ON_GROUND
+            | MavLandedState::MAV_LANDED_STATE_TAKEOFF
+            | MavLandedState::MAV_LANDED_STATE_IN_AIR => Some(false),
+            MavLandedState::MAV_LANDED_STATE_UNDEFINED => None,
+        }
     }
 
     pub fn vtol_in_forward_flight(&self) -> Option<bool> {
-        use mavlink::dialects::common::MavVtolState::*;
-        self.extended_sys_state
-            .as_ref()
-            .and_then(|s| match s.vtol_state {
-                MAV_VTOL_STATE_UNDEFINED => None,
-                MAV_VTOL_STATE_FW => Some(true),
-                MAV_VTOL_STATE_TRANSITION_TO_FW
-                | MAV_VTOL_STATE_TRANSITION_TO_MC
-                | MAV_VTOL_STATE_MC => Some(false),
-            })
+        use mavlink::dialects::common::MavVtolState;
+        let state = self.extended_sys_state.as_ref()?;
+        match state.vtol_state {
+            MavVtolState::MAV_VTOL_STATE_UNDEFINED => None,
+            MavVtolState::MAV_VTOL_STATE_FW => Some(true),
+            MavVtolState::MAV_VTOL_STATE_TRANSITION_TO_FW
+            | MavVtolState::MAV_VTOL_STATE_TRANSITION_TO_MC
+            | MavVtolState::MAV_VTOL_STATE_MC => Some(false),
+        }
     }
 
     pub fn selectable_modes(&self) -> impl Iterator<Item = &AvailableMode> + '_ {

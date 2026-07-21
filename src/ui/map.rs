@@ -1,7 +1,7 @@
 use super::theme;
 use egui::{Context, Response, Ui};
 use walkers::{
-    HttpTiles, Map, MapMemory, Plugin, Position, Projector, TileId, Tiles, lat_lon,
+    HttpTiles, Map, MapMemory, Plugin, Position, Projector, TileId, Tiles as _, lat_lon,
     sources::{Attribution, TileSource},
 };
 
@@ -45,7 +45,7 @@ impl MapView {
         egui_extras::install_image_loaders(&ctx);
         let (map_memory, last_position) = restored.unwrap_or_else(|| {
             let mut memory = MapMemory::default();
-            let _ = memory.set_zoom(3.0);
+            memory.set_zoom(3.0).ok();
             (memory, lat_lon(0.0, 0.0))
         });
         Self {
@@ -66,11 +66,11 @@ impl MapView {
         let acquired = self.vehicle_marker.is_none() && vehicle.is_some();
         self.vehicle_marker = vehicle;
         if let Some(marker) = &self.vehicle_marker {
-            self.last_position = marker.position.clone();
+            self.last_position = marker.position;
         }
         if acquired {
             self.map_memory.follow_my_position();
-            let _ = self.map_memory.set_zoom(16.0);
+            self.map_memory.set_zoom(16.0).ok();
         }
 
         let credit = self.tiles.attribution().text;
@@ -82,7 +82,7 @@ impl MapView {
         let mut map = Map::new(
             Some(&mut self.tiles),
             &mut self.map_memory,
-            self.last_position.clone(),
+            self.last_position,
         )
         .with_layer(&mut self.reference_tiles, 1.0)
         .zoom_with_ctrl(false);
@@ -113,7 +113,7 @@ impl MapView {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         if ui.button("Fly here").clicked() {
-                            action = Some(MapAction::Goto(prompt.position.clone()));
+                            action = Some(MapAction::Goto(prompt.position));
                             dismiss = true;
                         }
                         if ui.button("Cancel").clicked() {
@@ -142,17 +142,17 @@ impl Plugin for ClickPlugin<'_> {
         projector: &Projector,
         _map_memory: &MapMemory,
     ) {
-        if response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                *self.prompt = Some(GotoPrompt {
-                    position: projector.unproject(pos.to_vec2()),
-                    screen_pos: pos,
-                });
-            }
+        if response.clicked()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            *self.prompt = Some(GotoPrompt {
+                position: projector.unproject(pos.to_vec2()),
+                screen_pos: pos,
+            });
         }
 
         if let Some(prompt) = self.prompt.as_mut() {
-            prompt.screen_pos = projector.project(prompt.position.clone()).to_pos2();
+            prompt.screen_pos = projector.project(prompt.position).to_pos2();
         }
     }
 }
@@ -169,7 +169,7 @@ impl Plugin for VehiclePlugin {
         projector: &Projector,
         _map_memory: &MapMemory,
     ) {
-        let center = projector.project(self.marker.position.clone()).to_pos2();
+        let center = projector.project(self.marker.position).to_pos2();
 
         match self.marker.heading_deg {
             Some(heading) => {

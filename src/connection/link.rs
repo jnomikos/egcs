@@ -43,7 +43,7 @@ struct AppHandle {
 
 impl AppHandle {
     fn set(&self, status: ConnStatus) {
-        let _ = self.status_tx.send(status);
+        self.status_tx.send(status).ok();
         self.ctx.request_repaint();
     }
 }
@@ -55,8 +55,8 @@ async fn connect(url: &str) -> Result<Conn, Box<dyn std::error::Error>> {
 }
 
 async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, app_handle: &AppHandle) {
-    let _ = conn.send(&GCS_HEADER, &request_parameters()).await;
-    let _ = conn.send(&GCS_HEADER, &request_stream()).await;
+    conn.send(&GCS_HEADER, &request_parameters()).await.ok();
+    conn.send(&GCS_HEADER, &request_stream()).await.ok();
     let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(1));
     let mut modes_requested = false;
     loop {
@@ -72,16 +72,18 @@ async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, app_hand
                         // whenever the vehicle signals the set has changed.
                         let target_system = app_handle.telemetry_tx.borrow().system_id;
                         let modes_changed = matches!(msg, MavMessage::AVAILABLE_MODES_MONITOR(_));
-                        if let Some(sys) = target_system {
-                            if !modes_requested || modes_changed {
-                                let _ = conn.send(&GCS_HEADER, &request_available_modes(sys)).await;
-                                modes_requested = true;
-                            }
+                        if let Some(sys) = target_system
+                            && (!modes_requested || modes_changed)
+                        {
+                            conn.send(&GCS_HEADER, &request_available_modes(sys))
+                                .await
+                                .ok();
+                            modes_requested = true;
                         }
                     }
                 }
                 Err(e) => {
-                    println!("Link error, disconnecting: {}", e);
+                    log::error!("Link error, disconnecting: {e}");
                     break; // link dropped
                 }
             },
@@ -91,12 +93,12 @@ async fn connected(conn: Conn, cmd_rx: &mut UnboundedReceiver<Command>, app_hand
                 Some(Command::Vehicle(vehicle_cmd)) => {
                     let telemetry = app_handle.telemetry_tx.borrow().clone();
                     if let Err(e) = handle_vehicle_command(&conn, &telemetry, vehicle_cmd).await {
-                        println!("Command failed: {e}");
+                        log::error!("Command failed: {e}");
                     }
                 }
             },
             _ = heartbeat.tick() => {
-                let _ = conn.send(&GCS_HEADER, &gcs_heartbeat()).await;
+                conn.send(&GCS_HEADER, &gcs_heartbeat()).await.ok();
             }
         }
     }

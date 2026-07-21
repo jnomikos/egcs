@@ -1,5 +1,5 @@
 use super::map;
-use super::theme::*;
+use super::theme::{AMBER, BLUE, GREEN, RED, TEAL, action_button, stat_tile};
 use crate::connection::{self, ConnStatus};
 use crate::telemetry::Telemetry;
 use egui::{Ui, WidgetText};
@@ -62,37 +62,40 @@ impl DockContext {
             let landing = rx_borrowed.is_landing().unwrap_or(false);
 
             if armed && !flying {
-                if action_button(ui, "Disarm", RED) {
-                    if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(
-                            connection::VehicleCommand::Disarm,
-                        ));
-                    }
+                if action_button(ui, "Disarm", RED)
+                    && let Some(tx) = &self.cmd_tx
+                {
+                    tx.send(connection::Command::Vehicle(
+                        connection::VehicleCommand::Disarm,
+                    ))
+                    .ok();
                 }
 
-                if action_button(ui, "Takeoff", BLUE) {
-                    if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(
-                            connection::VehicleCommand::Takeoff { altitude: 20.0 },
-                        ));
-                    }
+                if action_button(ui, "Takeoff", BLUE)
+                    && let Some(tx) = &self.cmd_tx
+                {
+                    tx.send(connection::Command::Vehicle(
+                        connection::VehicleCommand::Takeoff { altitude: 20.0 },
+                    ))
+                    .ok();
                 }
             } else if armed && flying && !landing {
-                if action_button(ui, "Land", AMBER) {
-                    if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(
-                            connection::VehicleCommand::Land,
-                        ));
-                    }
+                if action_button(ui, "Land", AMBER)
+                    && let Some(tx) = &self.cmd_tx
+                {
+                    tx.send(connection::Command::Vehicle(
+                        connection::VehicleCommand::Land,
+                    ))
+                    .ok();
                 }
-            } else if !armed {
-                if action_button(ui, "Arm", GREEN) {
-                    if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Vehicle(
-                            connection::VehicleCommand::Arm,
-                        ));
-                    }
-                }
+            } else if !armed
+                && action_button(ui, "Arm", GREEN)
+                && let Some(tx) = &self.cmd_tx
+            {
+                tx.send(connection::Command::Vehicle(
+                    connection::VehicleCommand::Arm,
+                ))
+                .ok();
             }
 
             Self::flight_mode_selector(ui, &rx_borrowed, &self.cmd_tx);
@@ -114,12 +117,12 @@ impl DockContext {
                     if ui
                         .selectable_label(current == Some(mode.selector), &mode.name)
                         .clicked()
+                        && let Some(tx) = cmd_tx
                     {
-                        if let Some(tx) = cmd_tx {
-                            let _ = tx.send(connection::Command::Vehicle(
-                                connection::VehicleCommand::SetMode(mode.selector),
-                            ));
-                        }
+                        tx.send(connection::Command::Vehicle(
+                            connection::VehicleCommand::SetMode(mode.selector),
+                        ))
+                        .ok();
                     }
                 }
             });
@@ -140,23 +143,22 @@ impl DockContext {
                 ConnStatus::Connecting => "Connecting…",
                 _ => "Connect",
             };
-            if !connected {
-                if ui
+            if !connected
+                && ui
                     .add_enabled(!connecting, egui::Button::new(conn_label))
                     .clicked()
-                {
-                    if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Connect(self.connection_url.clone()));
-                    }
-                    self.conn_status = ConnStatus::Connecting;
+            {
+                if let Some(tx) = &self.cmd_tx {
+                    tx.send(connection::Command::Connect(self.connection_url.clone()))
+                        .ok();
                 }
+                self.conn_status = ConnStatus::Connecting;
             }
-            if connected || connecting {
-                if ui.button("Disconnect").clicked() {
-                    if let Some(tx) = &self.cmd_tx {
-                        let _ = tx.send(connection::Command::Disconnect);
-                    }
-                }
+            if (connected || connecting)
+                && ui.button("Disconnect").clicked()
+                && let Some(tx) = &self.cmd_tx
+            {
+                tx.send(connection::Command::Disconnect).ok();
             }
         });
     }
@@ -241,15 +243,16 @@ impl DockContext {
             None
         };
 
-        if let Some(map::MapAction::Goto(pos)) = map.show(ui, marker) {
-            if let Some(tx) = &self.cmd_tx {
-                let _ = tx.send(connection::Command::Vehicle(
-                    connection::VehicleCommand::DoReposition {
-                        latitude_deg: (pos.y() * 1e7) as i32,
-                        longitude_deg: (pos.x() * 1e7) as i32,
-                    },
-                ));
-            }
+        if let Some(map::MapAction::Goto(pos)) = map.show(ui, marker)
+            && let Some(tx) = &self.cmd_tx
+        {
+            tx.send(connection::Command::Vehicle(
+                connection::VehicleCommand::DoReposition {
+                    latitude_deg: (pos.y() * 1e7) as i32,
+                    longitude_deg: (pos.x() * 1e7) as i32,
+                },
+            ))
+            .ok();
         }
     }
 }
@@ -363,7 +366,7 @@ impl EgcsApp {
             rt.block_on(connection::run(cmd_rx, status_tx, telemetry_tx, ctx));
         });
 
-        let mut app: EgcsApp = cc
+        let mut app: Self = cc
             .storage
             .and_then(|s| eframe::get_value(s, eframe::APP_KEY))
             .unwrap_or_default();
@@ -405,7 +408,7 @@ impl eframe::App for EgcsApp {
         let style = self
             .dock_context
             .style
-            .get_or_insert(Style::from_egui(ui.style()))
+            .get_or_insert_with(|| Style::from_egui(ui.style()))
             .clone();
 
         DockArea::new(&mut self.tree)

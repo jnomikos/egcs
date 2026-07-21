@@ -17,7 +17,7 @@ impl Telemetry {
         self.global_position_int.as_ref().map(|p| {
             let vx = p.vx as f32 / 100.0;
             let vy = p.vy as f32 / 100.0;
-            (vx * vx + vy * vy).sqrt()
+            vx.hypot(vy)
         })
     }
 

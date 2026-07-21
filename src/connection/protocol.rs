@@ -121,9 +121,9 @@ pub fn request_parameters() -> MavMessage {
     })
 }
 
-/// Ask the vehicle to enumerate all of its flight modes via AVAILABLE_MODES.
+/// Ask the vehicle to enumerate all of its flight modes via `AVAILABLE_MODES`.
 pub fn request_available_modes(target_system: u8) -> MavMessage {
-    use mavlink::MessageData;
+    use mavlink::MessageData as _;
     use mavlink::dialects::common::{AVAILABLE_MODES_DATA, MavCmd};
     // param1 = message id to emit, param2 = 0 requests all modes.
     command_long(

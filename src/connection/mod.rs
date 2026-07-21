@@ -37,7 +37,7 @@ pub enum VehicleCommand {
     SetMode(ModeSelector),
 }
 
-#[derive(Default, PartialEq, Clone, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub enum ConnStatus {
     #[default]
     Disconnected,

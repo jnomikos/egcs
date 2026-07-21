@@ -52,7 +52,7 @@ impl Telemetry {
             }
             MavMessage::CURRENT_MODE(data) => self.current_mode = Some(data.clone()),
             MavMessage::COMMAND_ACK(data) => {
-                println!("Command ACK: {:?}", data);
+                log::debug!("Command ACK: {data:?}");
             }
             _ => {}
         }
